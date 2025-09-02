@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Orchestration API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8082
+paths:
+  /workflows/payments/start:
+    post:
+      summary: Start a payment workflow
+      operationId: startPaymentWorkflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartPaymentWorkflowRequest'
+      responses:
+        '200':
+          description: Workflow started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartPaymentWorkflowResponse'
+        '400': { description: Bad request }
+  /workflows/{workflowRunId}/status:
+    get:
+      summary: Get workflow status
+      operationId: getWorkflowStatus
+      parameters:
+        - in: path
+          name: workflowRunId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStatus'
+        '404': { description: Not found }
+  /workflows/{workflowRunId}/retry:
+    post:
+      summary: Retry or resume a workflow
+      operationId: retryWorkflow
+      parameters:
+        - in: path
+          name: workflowRunId
+          required: true
+          schema: { type: string }
+      responses:
+        '202': { description: Retry scheduled }
+        '404': { description: Not found }
+components:
+  schemas:
+    StartPaymentWorkflowRequest:
+      type: object
+      required: [paymentId, amountCents]
+      properties:
+        paymentId: { type: string }
+        amountCents: { type: integer, format: int64, minimum: 1 }
+        metadata: { type: object, additionalProperties: { type: string } }
+    StartPaymentWorkflowResponse:
+      type: object
+      required: [workflowRunId, status]
+      properties:
+        workflowRunId: { type: string }
+        status: { type: string, enum: [RUNNING] }
+    WorkflowStatus:
+      type: object
+      required: [workflowRunId, status]
+      properties:
+        workflowRunId: { type: string }
+        status:
+          type: string
+          enum: [RUNNING, COMPLETED, FAILED, COMPENSATED, CANCELED]
+        lastUpdated: { type: string, format: date-time }

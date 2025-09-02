@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: Moov ACH + Ledger API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8083
+paths:
+  /ach/debits:
+    post:
+      summary: Initiate ACH debit via Moov
+      operationId: createAchDebit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AchInstruction'
+      responses:
+        '201':
+          description: Debit created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AchResult'
+        '400': { description: Bad request }
+  /ach/credits:
+    post:
+      summary: Initiate ACH credit via Moov
+      operationId: createAchCredit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AchInstruction'
+      responses:
+        '201':
+          description: Credit created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AchResult'
+        '400': { description: Bad request }
+  /webhooks/moov:
+    post:
+      summary: Receive Moov webhook
+      operationId: receiveMoovWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '204': { description: Accepted }
+  /ledger/payments/{paymentId}:
+    get:
+      summary: Get ledger entries for a payment
+      operationId: getLedgerPayment
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerView'
+        '404': { description: Not found }
+  /reconciliation/report:
+    get:
+      summary: Get reconciliation report for a date
+      operationId: getReconciliationReport
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationReport'
+components:
+  schemas:
+    Money:
+      type: object
+      required: [amountCents, currency]
+      properties:
+        amountCents: { type: integer, format: int64, minimum: 1 }
+        currency: { type: string, example: USD }
+
+    AchInstruction:
+      type: object
+      required: [paymentId, accountId, amount]
+      properties:
+        paymentId: { type: string }
+        accountId: { type: string }
+        counterpartyAccountId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        direction: { type: string, enum: [DEBIT, CREDIT] }
+        memo: { type: string }
+
+    AchResult:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING, SUBMITTED, POSTED, FAILED] }
+
+    LedgerEntry:
+      type: object
+      required: [entryId, paymentId, side, amount, status, createdAt]
+      properties:
+        entryId: { type: string }
+        paymentId: { type: string }
+        side: { type: string, enum: [DEBIT, CREDIT] }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [RESERVED, POSTED, REVERSED] }
+        createdAt: { type: string, format: date-time }
+
+    LedgerView:
+      type: object
+      required: [paymentId, entries, balanced]
+      properties:
+        paymentId: { type: string }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/LedgerEntry' }
+        balanced: { type: boolean }
+
+    ReconciliationMismatch:
+      type: object
+      required: [paymentId, reason]
+      properties:
+        paymentId: { type: string }
+        reason: { type: string }
+
+    ReconciliationReport:
+      type: object
+      required: [asOfDate, mismatches]
+      properties:
+        asOfDate: { type: string, format: date }   # maps to java.time.LocalDate
+        mismatches:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciliationMismatch'

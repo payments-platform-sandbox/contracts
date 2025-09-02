@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /payments:
+    post:
+      summary: Create a payment (idempotent)
+      operationId: createPayment
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '202':
+          description: Accepted; orchestration started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePaymentResponse'
+        '400': { description: Bad request }
+        '409': { description: Idempotency conflict }
+  /payments/{paymentId}:
+    get:
+      summary: Get a payment
+      operationId: getPayment
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404': { description: Not found }
+  /payments/{paymentId}/refunds:
+    post:
+      summary: Refund a payment (OPA-gated)
+      operationId: refundPayment
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '202':
+          description: Refund accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '403': { description: Policy denied }
+        '404': { description: Not found }
+  /payments/{paymentId}/cancel:
+    post:
+      summary: Cancel a payment (OPA-gated)
+      operationId: cancelPayment
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: Cancel accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelResponse'
+        '403': { description: Policy denied }
+        '404': { description: Not found }
+components:
+  schemas:
+    Money:
+      type: object
+      required: [amountCents, currency]
+      properties:
+        amountCents: { type: integer, format: int64, minimum: 1 }
+        currency: { type: string, example: USD }
+    CreatePaymentRequest:
+      type: object
+      required: [sourceAccountId, destinationAccountId, amount]
+      properties:
+        sourceAccountId: { type: string }
+        destinationAccountId: { type: string }
+        memo: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        metadata: { type: object, additionalProperties: { type: string } }
+    CreatePaymentResponse:
+      type: object
+      required: [paymentId, workflowRunId, status]
+      properties:
+        paymentId: { type: string }
+        workflowRunId: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING] }
+    Payment:
+      type: object
+      required: [paymentId, amount, status, createdAt]
+      properties:
+        paymentId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        status: { type: string, enum: [PENDING, RUNNING, POSTED, FAILED, REFUNDED, CANCELED] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        metadata: { type: object, additionalProperties: { type: string } }
+    RefundRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { $ref: '#/components/schemas/Money' }
+        reason: { type: string }
+    RefundResponse:
+      type: object
+      required: [refundId, status]
+      properties:
+        refundId: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING] }
+    CancelResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [PENDING, RUNNING] }
